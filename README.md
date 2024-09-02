@@ -40,8 +40,7 @@ Choose the type of analysis you want to perform from the menu.
 
 # View Results and Insights:
 
-Analysis results and insights will be displayed directly in the terminal.
-Visualizations (e.g., heatmaps, clustering plots) will be saved in the analysis_images folder within your project directory.
+Analysis results and insights will be displayed directly in the terminal. Visualizations (e.g., heatmaps, clustering plots) will be displayed within the terminal using Seaborn and saved in the analysis_images folder within your project directory.
 
 4. **Project Structure**
 

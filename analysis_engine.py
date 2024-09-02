@@ -1,134 +1,139 @@
-from sklearn.cluster import KMeans
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestClassifier, IsolationForest
-import numpy as np
-import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
-import os
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.linear_model import Ridge, Lasso
+from sklearn.ensemble import RandomForestClassifier
+from scipy import stats
+import numpy as np
+from sklearn.metrics import mean_squared_error
+
 
 class AnalysisEngine:
     def __init__(self, data):
         self.data = data
-        self.save_path = os.path.join(os.getcwd(), 'analysis_images')
-
-        if not os.path.exists(self.save_path):
-            os.makedirs(self.save_path)
 
     def correlation_analysis(self):
-        """Perform correlation analysis and save correlation heatmap as PNG."""
-        correlation_matrix = self.data.corr()
-        self._plot_correlation(correlation_matrix)
-        return correlation_matrix
+        """Perform correlation analysis and visualize the correlation matrix."""
+        # Select only numeric columns
+        numeric_data = self.data.select_dtypes(include=['number'])
+    
+        if numeric_data.empty:
+            print("No numeric columns available for correlation analysis.")
+            return
+    
+        correlation_matrix = numeric_data.corr(method='spearman')
 
-    def clustering_analysis(self, n_clusters=3):
-        """Perform clustering analysis using KMeans."""
-        kmeans = KMeans(n_clusters=n_clusters)
-        self.data['Cluster'] = kmeans.fit_predict(self.data.select_dtypes(include=['float64', 'int64']))
-        self._plot_clustering()
-        return self.data, kmeans
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+        plt.title('Correlation Matrix')
+        plt.show()
 
-    def regression_analysis(self, target_column):
-        """Perform regression analysis."""
+        insights = correlation_matrix.unstack().sort_values(ascending=False)
+        print("Insights:")
+        print(insights)
+        return insights
+
+
+    def clustering_analysis(self, algorithm='kmeans', n_clusters=2):
+        """Perform clustering analysis using the specified algorithm."""
+        # Drop non-numeric columns
+        data_numeric = self.data.select_dtypes(include=['float64', 'int64'])
+        
+        if algorithm == 'kmeans':
+            model = KMeans(n_clusters=n_clusters)
+        elif algorithm == 'dbscan':
+            model = DBSCAN()
+        else:
+            raise ValueError("Unsupported algorithm. Choose 'kmeans' or 'dbscan'.")
+
+        clusters = model.fit_predict(data_numeric)
+        self.data['Cluster'] = clusters
+        
+        plt.figure(figsize=(10, 8))
+        sns.scatterplot(x=data_numeric.iloc[:, 0], y=data_numeric.iloc[:, 1], hue=self.data['Cluster'], palette='viridis')
+        plt.title(f'{algorithm.capitalize()} Clustering')
+        plt.show()
+
+        # Insights
+        print(f"Insights: Data has been clustered into {n_clusters} clusters using {algorithm}.")
+
+    def regression_analysis(self, target_column, model_type='ridge'):
+        """Perform regression analysis using the specified model."""
         X = self.data.drop(columns=[target_column])
         y = self.data[target_column]
-        model = LinearRegression()
+
+        # Handle categorical features by encoding them
+        X = pd.get_dummies(X)
+
+        if model_type == 'ridge':
+            model = Ridge()
+        elif model_type == 'lasso':
+            model = Lasso()
+        else:
+            raise ValueError("Unsupported model type. Choose 'ridge' or 'lasso'.")
+
         model.fit(X, y)
-        self._plot_regression(X, y, model)
-        return model.coef_, model.intercept_
+        predictions = model.predict(X)
+
+        # Calculate Mean Squared Error
+        mse = mean_squared_error(y, predictions)
+        
+        plt.figure(figsize=(10, 8))
+        sns.scatterplot(x=y, y=predictions)
+        plt.title(f'{model_type.capitalize()} Regression')
+        plt.xlabel('True Values')
+        plt.ylabel('Predictions')
+        plt.show()
+
+        # Insights
+        print(f"Insights: {model_type.capitalize()} regression model has been trained and evaluated.")
+        
+        return mse
 
     def classification_analysis(self, target_column):
-        """Perform classification analysis using RandomForest."""
+        """Perform classification analysis."""
         X = self.data.drop(columns=[target_column])
         y = self.data[target_column]
+
+        # Handle categorical features by encoding them
+        X = pd.get_dummies(X)
+
         model = RandomForestClassifier()
         model.fit(X, y)
-        self._plot_feature_importance(model)
-        return model.feature_importances_
+        predictions = model.predict(X)
+
+        plt.figure(figsize=(10, 8))
+        sns.scatterplot(x=y, y=predictions)
+        plt.title('Classification Results')
+        plt.xlabel('True Labels')
+        plt.ylabel('Predictions')
+        plt.show()
+
+        # Insights
+        print("Insights: Classification model has been trained and evaluated.")
 
     def descriptive_statistics(self):
-        """Calculate descriptive statistics."""
-        return self.data.describe()
+        """Calculate and display descriptive statistics."""
+        stats_summary = self.data.describe()
+        print("Descriptive Statistics:\n", stats_summary)
+
+        # Insights
+        print("Insights: Descriptive statistics calculated for the numerical features.")
 
     def anomaly_detection(self):
-        """Perform anomaly detection using Isolation Forest."""
-        model = IsolationForest(contamination=0.1)
-        self.data['Anomaly'] = model.fit_predict(self.data.select_dtypes(include=['float64', 'int64']))
-        anomalies = self.data[self.data['Anomaly'] == -1]
-        self._plot_anomalies(anomalies)
-        return anomalies
+        """Perform anomaly detection using Z-score."""
+        data_numeric = self.data.select_dtypes(include=['float64', 'int64'])
+        z_scores = np.abs(stats.zscore(data_numeric))
+        anomalies = (z_scores > 3).astype(int)
 
-    def _plot_correlation(self, correlation_matrix):
-        """Plot and save the correlation matrix heatmap."""
+        self.data['Anomaly'] = anomalies.max(axis=1)
+
         plt.figure(figsize=(10, 8))
-        sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
-        plt.title('Correlation Matrix Heatmap')
-        plt.savefig(os.path.join(self.save_path, 'Correlation_Matrix.png'))
-        plt.close()
-
-    def _plot_clustering(self):
-        """Plot clustering results."""
-        plt.scatter(self.data.iloc[:, 0], self.data.iloc[:, 1], c=self.data['Cluster'], cmap='viridis')
-        plt.title('Clustering Results')
-        plt.xlabel('Feature 1')
-        plt.ylabel('Feature 2')
-        plt.savefig(os.path.join(self.save_path, 'Clustering_Results.png'))
-        plt.close()
-
-    def _plot_regression(self, X, y, model):
-        """Plot regression results."""
-        plt.scatter(X.iloc[:, 0], y, color='blue')
-        plt.plot(X.iloc[:, 0], model.predict(X), color='red')
-        plt.title('Regression Results')
-        plt.xlabel('Feature')
-        plt.ylabel('Target')
-        plt.savefig(os.path.join(self.save_path, 'Regression_Results.png'))
-        plt.close()
-
-    def _plot_feature_importance(self, model):
-        """Plot feature importance."""
-        importances = model.feature_importances_
-        indices = np.argsort(importances)
-        plt.title('Feature Importance')
-        plt.barh(range(len(indices)), importances[indices], align='center')
-        plt.yticks(range(len(indices)), indices)
-        plt.xlabel('Importance')
-        plt.savefig(os.path.join(self.save_path, 'Feature_Importance.png'))
-        plt.close()
-
-    def _plot_anomalies(self, anomalies):
-        """Plot anomalies."""
-        plt.scatter(self.data.iloc[:, 0], self.data.iloc[:, 1], color='blue', label='Normal')
-        plt.scatter(anomalies.iloc[:, 0], anomalies.iloc[:, 1], color='red', label='Anomaly')
+        sns.scatterplot(x=self.data.index, y=self.data['Total'], hue=self.data['Anomaly'], palette='coolwarm')
         plt.title('Anomaly Detection')
-        plt.xlabel('Feature 1')
-        plt.ylabel('Feature 2')
-        plt.legend()
-        plt.savefig(os.path.join(self.save_path, 'Anomaly_Detection.png'))
-        plt.close()
+        plt.show()
 
-    def generate_insights(self, analysis_type, result):
-        """Generate insights based on the analysis type and result."""
-        insights = ""
-        if analysis_type == 'correlation':
-            strong_correlations = result[(result.abs() > 0.7) & (result != 1.0)].stack()
-            if not strong_correlations.empty:
-                insights = f"Strong correlations found between the following pairs:\n{strong_correlations}"
-            else:
-                insights = "No strong correlations found between any pairs of variables."
-        elif analysis_type == 'clustering':
-            num_clusters = len(np.unique(result['Cluster']))
-            cluster_sizes = result['Cluster'].value_counts()
-            insights = f"Clustering analysis identified {num_clusters} clusters. Cluster sizes are: \n{cluster_sizes.to_string()}"
-        elif analysis_type == 'regression':
-            coef, intercept = result
-            insights = f"Regression analysis suggests that the relationship between the predictors and the target variable is linear. Coefficients of the model are: {coef} with an intercept of {intercept}."
-        elif analysis_type == 'classification':
-            top_features = np.argsort(result)[-3:][::-1]
-            insights = f"Classification analysis indicates that the top 3 features influencing the target variable are: {top_features}."
-        elif analysis_type == 'descriptive_stats':
-            mean_values = result.loc['mean']
-            insights = f"Descriptive statistics indicate the average values of the numerical features are: \n{mean_values.to_string()}"
-        elif analysis_type == 'anomaly_detection':
-            num_anomalies = len(result)
-            insights = f"Anomaly detection identified {num_anomalies} anomalies. These outliers could indicate unusual behavior or errors in the data."
-        return insights
+        # Insights
+        print("Insights: Anomaly detection completed. Outliers have been marked.")
