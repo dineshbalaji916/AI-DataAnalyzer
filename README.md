@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI DataAnalyzer CLI Tool is a command-line interface application designed to perform various data analysis techniques on employee data using machine learning algorithms. This tool allows users to easily ingest data, perform analyses, generate insights, and visualize results, all from the command line.
+The AI DataAnalyzer CLI Tool is a command-line interface application designed to perform various data analysis techniques on structured data using machine learning algorithms. This tool allows users to easily ingest data, perform analyses, generate insights, and visualize results, all from the command line.
 
 ## Features
 
